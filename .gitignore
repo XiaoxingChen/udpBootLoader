@@ -1,0 +1,11 @@
+*.o
+*.d
+*.crf
+*.TMP
+*.bak
+/Output/
+/Listings/
+/.vscode/
+/DebugConfig/
+/Project/
+/User/CConsole.*
