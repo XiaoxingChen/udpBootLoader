@@ -1,42 +1,15 @@
 #include "stmflash.h"
 #include "iap.h" 
 #include "st_bootloader_protocol.h"
+#include "printf.h"
 
 iapfun jump2app; 
-uint32_t iapbuf[512]; 	//2K字节缓存  
-//appxaddr:应用程序的起始地址
-//appbuf:应用程序CODE.
-//appsize:应用程序大小(字节).
-void iap_write_appbin(uint32_t appxaddr,uint8_t *appbuf,uint32_t appsize)
-{
-	uint32_t t;
-	uint16_t i=0;
-	uint32_t temp;
-	uint32_t fwaddr=appxaddr;//当前写入的地址
-	uint8_t *dfu=appbuf;
-	for(t=0;t<appsize;t+=4)
-	{						   
-		temp=(uint32_t)dfu[3]<<24;   
-		temp|=(uint32_t)dfu[2]<<16;    
-		temp|=(uint32_t)dfu[1]<<8;
-		temp|=(uint32_t)dfu[0];	  
-		dfu+=4;//偏移4个字节
-		iapbuf[i++]=temp;	    
-		if(i==512)
-		{
-			i=0; 
-			STMFLASH_Write(fwaddr,iapbuf,512);
-			fwaddr+=2048;//偏移2048  512*4=2048
-		}
-	} 
-	if(i)STMFLASH_Write(fwaddr,iapbuf,i);//将最后的一些内容字节写进去.  
-}
 
-__asm void __set_MSP(uint32_t mainStackPointer)
-{
-  msr msp, r0
-  bx lr
-}
+//__asm void __set_MSP(uint32_t mainStackPointer)
+//{
+//  msr msp, r0
+//  bx lr
+//}
 //跳转到应用程序段
 //appxaddr:用户代码起始地址.
 void iap_load_app(uint32_t appxaddr)
@@ -47,8 +20,24 @@ void iap_load_app(uint32_t appxaddr)
 		__set_MSP(*(volatile uint32_t*)appxaddr);					//初始化APP堆栈指针(用户代码区的第一个字用于存放栈顶地址)
 		jump2app();									//跳转到APP.
 	}
+	printf("stack top address illegal...\r\n");
 }		 
 
+/**
+  * @brief  check boot parameter in OTP
+	* @param  None
+	* @retval None
+  */
+uint32_t check_boot_parameter()
+{
+	return *((volatile uint32_t*)0x1FFF7800);
+}
+
+/**
+  * @brief  run iap logic
+	* @param  None
+	* @retval None
+  */
 void iap_run()
 {
 	static uint8_t iap_tick = 0;

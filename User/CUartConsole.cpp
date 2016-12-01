@@ -9,17 +9,17 @@
 #include "CUartConsole.h"
 #include <stdarg.h>
 #include <stdio.h>
-#include "string.h"
+#include <string.h>
+#if CONSOLE_TX_USE_DMA
+char CUartConsole::TxDmaBuf_[TX_DMA_SIZE];	//for txDma
+#endif //CONSOLE_TX_DMAST
+char CUartConsole::TxBuf_[TXBUF_SIZE];		//buffer for None DMA Mode txQueue_
+char CUartConsole::vsnprintfBuf_[TXBUF_SIZE];	//for sprintf
 
-/* when ucos was used */
-#if CONSOLE_WITH_UCOS 
-#include "ucos_ii.h"
-#endif
-
-char CUartConsole::TxBuf_[TXBUF_SIZE];
-#ifdef CONSOLE_NONEDMA_MODE
-char CUartConsole::vsnpritfBuf_[TXBUF_SIZE];
-#endif
+#ifdef CONSOLE_RX_DMAST
+char CUartConsole::RxDmaBuf_[RX_DMA_SIZE];	//for rxDma
+#endif //CONSOLE_RX_DMAST
+char CUartConsole::RxBuf_[RXBUF_SIZE];			//for rxQueue_
 
 /**
   * @brief  Constructor
@@ -27,17 +27,21 @@ char CUartConsole::vsnpritfBuf_[TXBUF_SIZE];
   * @retval None
   */
 CUartConsole::CUartConsole()
-	:overflowCounter_(0),
-#ifdef CONSOLE_NONEDMA_MODE
-	buffront_ptr_(TxBuf_),
-#endif
-	bufback_ptr_(TxBuf_)
+	:txQueue_(TxBuf_, TXBUF_SIZE),
+	rxQueue_(RxBuf_, RXBUF_SIZE),
+	overflowCounter_(0)
 {
-	uint32_t streamx = (((uint32_t)CONSOLE_TX_DMAST&0xFF) - 0x10)/0x18;	// 0-7
+#if CONSOLE_SILENT
+	return ;
+#endif
 	
-	if(streamx < 4) TXDMA_IFCR_ = &(CONSOLE_DMA->LIFCR);
-	else TXDMA_IFCR_ = &(CONSOLE_DMA->HIFCR);
-	switch(streamx % 4)
+#ifdef CONSOLE_TX_DMAST
+	DMA_TypeDef * txDMAx = (DMA_TypeDef *)((uint32_t)CONSOLE_TX_DMAST&0xFFFFFC00);
+	uint32_t txStreamx = (((uint32_t)CONSOLE_TX_DMAST&0xFF) - 0x10)/0x18;	// 0-7
+	
+	if(txStreamx < 4) TXDMA_IFCR_ = &(txDMAx->LIFCR);
+	else TXDMA_IFCR_ = &(txDMAx->HIFCR);
+	switch(txStreamx % 4)
 	{
 		case 0:
 			TXDMA_IFCR_MASK = 1<<5;
@@ -52,39 +56,34 @@ CUartConsole::CUartConsole()
 			TXDMA_IFCR_MASK = 1<<27;
 			break;
 	}
+#endif
 	
+#ifdef CONSOLE_RX_DMAST
+	DMA_TypeDef * rxDMAx = (DMA_TypeDef *)((uint32_t)CONSOLE_RX_DMAST&0xFFFFFC00);
+	uint32_t rxStreamx = (((uint32_t)CONSOLE_RX_DMAST&0xFF) - 0x10)/0x18;	// 0-7
+	
+	if(rxStreamx < 4) RXDMA_IFCR_ = &(rxDMAx->LIFCR);
+	else RXDMA_IFCR_ = &(rxDMAx->HIFCR);
+	switch(rxStreamx % 4)
+	{
+		case 0:
+			RXDMA_IFCR_MASK = 1<<5;
+			break;
+		case 1:
+			RXDMA_IFCR_MASK = 1<<11;
+			break;
+		case 2:
+			RXDMA_IFCR_MASK = 1<<21;
+			break;
+		case 3:
+			RXDMA_IFCR_MASK = 1<<27;
+			break;
+	}
+#endif
 	InitSciGpio();
 	InitSci();
 	
-	/* when ucos was used */
-#if CONSOLE_WITH_UCOS 
-	uint8_t err;
-	sendQueMutex_ = OSMutexCreate(1,&err);
-	if(err != OS_ERR_NONE) while(1);
-#endif
 }
-
-/**
-  * @brief  send an array with a length
-	* @param  buf: pointer of the array
-	* @param  size: length of the array
-  * @retval If there is data in Tx buf, do nothing and return 0.
-	*					If there is nothing is Tx buf, send message and return 1.
-  */
-uint8_t CUartConsole::send_Array(uint8_t* buf, uint8_t size)
-{
-	
-	if(CONSOLE_TX_DMAST->NDTR != 0) return 0;
-	
-	DMA_Cmd(CONSOLE_TX_DMAST, DISABLE);//data left in buff will be cut
-	*TXDMA_IFCR_ = TXDMA_IFCR_MASK;
-	CONSOLE_TX_DMAST->NDTR = size;
-	CONSOLE_TX_DMAST->M0AR = (uint32_t)buf;
-	
-	DMA_Cmd(CONSOLE_TX_DMAST, ENABLE);
-	return 1;
-}
-
 /**
   * @brief  Initialize the UART GPIO
   * @param  None
@@ -172,16 +171,9 @@ void CUartConsole::InitSci()
 	USART_DMACmd(CONSOLE_UART, USART_DMAReq_Tx, ENABLE);
 	USART_DMACmd(CONSOLE_UART, USART_DMAReq_Rx, ENABLE);
 	
-#ifdef CONSOLE_DMA_MODE
-	/* DMA Clock Config */
-	uint32_t RCC_AHB1Periph;
-	if(CONSOLE_DMA == DMA1) RCC_AHB1Periph = RCC_AHB1Periph_DMA1;
-	else if(CONSOLE_DMA == DMA2) RCC_AHB1Periph = RCC_AHB1Periph_DMA2;
-	else while(1); //error
-	RCC_AHB1PeriphClockCmd(RCC_AHB1Periph, ENABLE);
-	
 	DMA_InitTypeDef DMA_InitStructure;
 	
+#if (defined CONSOLE_TX_DMAST) || (defined CONSOLE_RX_DMAST)
 	DMA_InitStructure.DMA_PeripheralInc = DMA_PeripheralInc_Disable;
 	DMA_InitStructure.DMA_MemoryInc = DMA_MemoryInc_Enable;
 	DMA_InitStructure.DMA_PeripheralDataSize = DMA_PeripheralDataSize_Byte;
@@ -192,62 +184,66 @@ void CUartConsole::InitSci()
 	DMA_InitStructure.DMA_FIFOThreshold = DMA_FIFOThreshold_HalfFull; 
 	DMA_InitStructure.DMA_MemoryBurst = DMA_MemoryBurst_Single; 
 	DMA_InitStructure.DMA_PeripheralBurst = DMA_PeripheralBurst_Single;
-	DMA_InitStructure.DMA_Channel = DMA_Channel_4; //attention!
+	if(CONSOLE_UART == USART6)
+		DMA_InitStructure.DMA_Channel = DMA_Channel_5; //attention!
+	else
+		DMA_InitStructure.DMA_Channel = DMA_Channel_4; //attention!
+#endif
+
+#ifdef CONSOLE_TX_DMAST
+	/* DMA Clock Config */
+	uint32_t txRCC_AHB1Periph;
+	DMA_TypeDef * txDMAx = (DMA_TypeDef *)((uint32_t)CONSOLE_TX_DMAST&0xFFFFFC00);
+	if(txDMAx == DMA1) txRCC_AHB1Periph = RCC_AHB1Periph_DMA1;
+	else if(txDMAx == DMA2) txRCC_AHB1Periph = RCC_AHB1Periph_DMA2;
+	else while(1); //error
+	RCC_AHB1PeriphClockCmd(txRCC_AHB1Periph, ENABLE);
 	
 	/* TX DMA Config */	
 	DMA_InitStructure.DMA_PeripheralBaseAddr = (uint32_t)&(CONSOLE_UART->DR);
-	DMA_InitStructure.DMA_Memory0BaseAddr = (uint32_t)TxBuf_;
+	DMA_InitStructure.DMA_Memory0BaseAddr = (uint32_t)TxDmaBuf_;
 	DMA_InitStructure.DMA_DIR = DMA_DIR_MemoryToPeripheral;
 	DMA_InitStructure.DMA_BufferSize = 0;
 	
 	DMA_Cmd(CONSOLE_TX_DMAST, DISABLE);
 	DMA_Init(CONSOLE_TX_DMAST, &DMA_InitStructure);
 #endif
+
+#ifdef CONSOLE_RX_DMAST
+	/* DMA Clock Config */
+	DMA_TypeDef * rxDMAx = (DMA_TypeDef *)((uint32_t)CONSOLE_RX_DMAST&0xFFFFFC00);
+	uint32_t rxRCC_AHB1Periph;
+	if(rxDMAx == DMA1) rxRCC_AHB1Periph = RCC_AHB1Periph_DMA1;
+	else if(rxDMAx == DMA2) rxRCC_AHB1Periph = RCC_AHB1Periph_DMA2;
+	else while(1); //error
+	RCC_AHB1PeriphClockCmd(rxRCC_AHB1Periph, ENABLE);
+		
+	/* RX DMA Config */	
+	DMA_InitStructure.DMA_PeripheralBaseAddr = (uint32_t)&(CONSOLE_UART->DR);
+	DMA_InitStructure.DMA_Memory0BaseAddr = (uint32_t)RxDmaBuf_;
+	DMA_InitStructure.DMA_DIR = DMA_DIR_PeripheralToMemory;
+	DMA_InitStructure.DMA_BufferSize = RX_DMA_SIZE;
+	
+	DMA_Cmd(CONSOLE_RX_DMAST, DISABLE);
+	*RXDMA_IFCR_ = RXDMA_IFCR_MASK;
+	DMA_Init(CONSOLE_RX_DMAST, &DMA_InitStructure);
+	DMA_Cmd(CONSOLE_RX_DMAST, ENABLE);
+#endif
 }
 
+
 /**
-  * @brief  printf a string
+  * @brief  do nothing to avoid the warning of compiler
   * @param  None
-  * @retval number of bytes were sent
+  * @retval always be 0
   */
-#ifdef CONSOLE_DMA_MODE
+#if CONSOLE_SILENT
 int CUartConsole::printf(const char* fmt, ...)
 {
-	DMA_Cmd(CONSOLE_TX_DMAST, DISABLE);
-	uint8_t dma_ndtr_temp = CONSOLE_TX_DMAST->NDTR;
-	if(dma_ndtr_temp == 0) bufback_ptr_ = TxBuf_;
-	
-	uint16_t emptyBytesInBuf = TXBUF_SIZE - (bufback_ptr_ - TxBuf_);
-	if(0 == emptyBytesInBuf) 
-	{
-		overflowCounter_++;
-		*TXDMA_IFCR_ = TXDMA_IFCR_MASK;
-		DMA_Cmd(CONSOLE_TX_DMAST, ENABLE);
-		return 0;
-	}
-	
-	va_list args;
-	int n;
-	
-	va_start(args, fmt);
-	n = vsnprintf(bufback_ptr_, emptyBytesInBuf, fmt, args);
-	va_end(args);
-	
-	/* check if TxBuf_ overflow */
-	if(n > emptyBytesInBuf)
-	{
-		n = emptyBytesInBuf;
-		overflowCounter_++;
-	}
-	
-	CONSOLE_TX_DMAST->NDTR += n;
-	CONSOLE_TX_DMAST->M0AR = (uint32_t)(bufback_ptr_ - dma_ndtr_temp);
-	bufback_ptr_ += n;
-	
-	*TXDMA_IFCR_ = TXDMA_IFCR_MASK;
-	DMA_Cmd(CONSOLE_TX_DMAST, ENABLE);
-	return n;
+	return 0;
 }
+
+#else // !CONSOLE_SILENT
 
 /**
   * @brief  printf a string without DMA controller.
@@ -255,71 +251,83 @@ int CUartConsole::printf(const char* fmt, ...)
   * @param  None
   * @retval number of bytes were sent
   */
-#elif CONSOLE_NONEDMA_MODE
-#include "CLed.h"
 int CUartConsole::printf(const char* fmt, ...)
 {
-	int32_t bytesInBuf = int32_t((uint32_t)bufback_ptr_-(uint32_t)buffront_ptr_);
-	if(bytesInBuf < 0) bytesInBuf += TXBUF_SIZE;
-	uint16_t emptyBytesInBuf = TXBUF_SIZE - bytesInBuf;
-	
-	if(TXBUF_SIZE == bytesInBuf)
-	{
-		overflowCounter_++;
-		return 0;
-	}
 	va_list args;
 	int n;
+	int ret;
 	
+	//TODO lock vsnprintf mutex
 	va_start(args, fmt);
-	n = vsnprintf(vsnpritfBuf_, emptyBytesInBuf, fmt, args);
+	n = vsnprintf(vsnprintfBuf_, TXBUF_SIZE, fmt, args);
 	va_end(args);
+	if(n > TXBUF_SIZE) n = TXBUF_SIZE;
 	
-	/* check if TxBuf_ overflow */
-	if(n > emptyBytesInBuf)
-	{
-		n = emptyBytesInBuf;
-		overflowCounter_++;
-	}
-	
-	/* The code blow access the bufback_ptr_ and buffront_ptr_.
-		these two pointers will also be write by ::run(), when OS
-		is runing. So Mutex is neccessary here	*/
-#if CONSOLE_WITH_UCOS 
-	uint8_t mutexErr;
-	OSMutexPend(sendQueMutex_, 0, &mutexErr);//Infinite wait
-#endif
-	
-	/* front pointer is before back pointer */
-	if((uint32_t)buffront_ptr_ <= (uint32_t)bufback_ptr_)
-	{
-		/* pushback */
-		uint16_t bytes_buffend_To_Queueback = TXBUF_SIZE - ((uint32_t)bufback_ptr_ - (uint32_t)TxBuf_);//[1, TXBUF_SIZE]
-		if(n >= bytes_buffend_To_Queueback)
-		{
-			memcpy(bufback_ptr_, vsnpritfBuf_, bytes_buffend_To_Queueback);
-			memcpy(TxBuf_, vsnpritfBuf_ + bytes_buffend_To_Queueback, n - bytes_buffend_To_Queueback);
-			bufback_ptr_ = TxBuf_ + n - bytes_buffend_To_Queueback;
-		}else
-		{
-			memcpy(bufback_ptr_, vsnpritfBuf_, n);
-			bufback_ptr_ += n;
-		}
-	}
-	/* back pointer is before front pointer */
-	else
-	{
-		memcpy(bufback_ptr_, vsnpritfBuf_, n);
-		bufback_ptr_ += n;
-	}
-	
-	/* release mutex when ucos was used */
-#if CONSOLE_WITH_UCOS 
-	OSMutexPost(sendQueMutex_);
-#endif
-	return n;
+	ret = send_array(vsnprintfBuf_, n);
+	//TODO release vsnprintf mutex
+	return ret;
 }
-#endif
+
+/**
+  * @brief  for None Dma Mode
+  * @param  char to send
+  * @retval None
+  */
+void CUartConsole::putc(const char c)
+{
+	//TODO add mutex lock here
+	txQueue_.push(c);
+	//TODO release mutex lock here
+	transmitterRun();
+}
+
+/**
+  * @brief  for None Dma Mode
+  * @param  string to send
+  * @retval None
+  */
+void CUartConsole::puts(const char* s)
+{
+	//TODO add mutex lock here
+	txQueue_.push_array((char*)s, strlen(s));
+	//TODO release mutex lock here
+	transmitterRun();
+}
+
+/**
+  * @brief  for None Dma Mode
+  * @param  None
+  * @retval char get
+  */
+int CUartConsole::getc(void)
+{
+	//TODO add mutex lock here
+	int ret = rxQueue_.front();
+	
+	/* check if ret is valid */
+	if(rxQueue_.pop())
+		return ret;
+	/* empty queue, ret is invalid */		
+	else 
+		return -1;
+	//TODO release mutex lock here
+}
+
+/**
+  * @brief  send array
+  * @param  None
+  * @retval char get
+  */
+uint16_t CUartConsole::send_array(char* buf, uint16_t len)
+{
+	uint16_t res;
+	//TODO add mutex lock here
+	res = txQueue_.push_array(buf, len);
+	//TODO release mutex lock here
+	transmitterRun();
+	return res;
+}
+#endif	// CONSOLE_SILENT
 
 /**
   * @brief  wait until a char was read from UART
@@ -342,36 +350,117 @@ void CUartConsole::postErr()
 {}
 #define postErr(msg) printf("Error: %s(%d)-%s(): %s\r\n", __FILE__, __LINE__, __FUNCTION__, msg)
 
+/**
+* @brief  get empty bytes in txQueue_
+* @param  None
+* @retval Number of empty bytes
+*/
+uint16_t CUartConsole::get_emptyBytesInTxQueue()
+{
+	return txQueue_.emptyElemsInQue();
+}
+
+/**
+  * @brief  run UART transmitter, in another word TXD
+  * @param  None
+  * @retval None
+  */
+void CUartConsole::transmitterRun()
+{
+#if CONSOLE_TX_USE_DMA
+	uint16_t bytesToSend;
+	if((txQueue_.elemsInQue() != 0) && 0==DMA_GetCurrDataCounter(CONSOLE_TX_DMAST))
+	{
+		DMA_Cmd(CONSOLE_TX_DMAST, DISABLE);
+		bytesToSend = (txQueue_.elemsInQue() < TX_DMA_SIZE) ? txQueue_.elemsInQue(): TX_DMA_SIZE;
+		txQueue_.pop_array(TxDmaBuf_, bytesToSend);
+		CONSOLE_TX_DMAST->NDTR = bytesToSend;
+		*TXDMA_IFCR_ = TXDMA_IFCR_MASK;
+		DMA_Cmd(CONSOLE_TX_DMAST, ENABLE);
+	}
+	
+#else // !CONSOLE_TX_USE_DMA
+	if((txQueue_.elemsInQue() != 0) && USART_GetFlagStatus(CONSOLE_UART, USART_FLAG_TXE))
+	{
+		CONSOLE_UART->DR = txQueue_.front();
+		txQueue_.pop();
+	}
+#endif
+}
+
+/**
+  * @brief  run UART receiver, in another word RXD
+  * @param  None
+  * @retval None
+  */
+void CUartConsole::receiverRun()
+{
+#if CONSOLE_RX_USE_DMA
+	rxDMA_to_rxQueue();
+#else // !CONSOLE_RX_USE_DMA
+	
+#endif
+}
 
 /**
   * @brief  run. Valid only in NoneDMA mode
   * @param  None
   * @retval None
   */
-#ifdef CONSOLE_NONEDMA_MODE
 void CUartConsole::run()
 {
-	int32_t bytesInBuf = int32_t((uint32_t)bufback_ptr_-(uint32_t)buffront_ptr_);
+	transmitterRun();
+	receiverRun();
+}
+
+/**
+* @brief  Is Transmitter idel or not
+* @param  None
+* @retval If is idel
+*/
+bool CUartConsole::isTransmitterIdel()
+{
+	transmitterRun();
+	return (0 == txQueue_.elemsInQue() 
+		&& 0 == DMA_GetCurrDataCounter(CONSOLE_TX_DMAST)
+		&& 1 == USART_GetFlagStatus(CONSOLE_UART, USART_FLAG_TXE));
+}
+
+/**
+  * @brief  move data from RX DMA buffer to rxQueue_
+  * @param  None
+  * @retval None
+  */
+#ifdef CONSOLE_RX_DMAST
+void CUartConsole::rxDMA_to_rxQueue()
+{
+	uint8_t rxDataSize;	
+	/* get rx data size without stop DMA */
+	rxDataSize = RX_DMA_SIZE - CONSOLE_RX_DMAST->NDTR;
+	if(rxDataSize == 0) return;
 	
-		/* The code blow access the bufback_ptr_ and buffront_ptr_.
-		these two pointers will also be write by ::run(), when OS
-		is runing. So Mutex is neccessary here	*/
-#if CONSOLE_WITH_UCOS 
-	uint8_t mutexErr;
-	OSMutexPend(sendQueMutex_, 0,&mutexErr);
-#endif
+	/* stop DMA */
+	DMA_Cmd(CONSOLE_RX_DMAST, DISABLE);
+	*RXDMA_IFCR_ = RXDMA_IFCR_MASK;
+	/* get rx data size again */
+	rxDataSize = RX_DMA_SIZE - CONSOLE_RX_DMAST->NDTR;
 	
-	if(bytesInBuf < 0) bytesInBuf += TXBUF_SIZE;
-	if((bytesInBuf != 0) && USART_GetFlagStatus(CONSOLE_UART, USART_FLAG_TXE))
+		/* check for overflow */
+	if(rxDataSize > 10) overflowCounter_++;
+	
+	/* push data into rxQueue */
+	rxQueue_.push_array(RxDmaBuf_, rxDataSize);
+	
+	CONSOLE_RX_DMAST->NDTR = RX_DMA_SIZE;
+	DMA_Cmd(CONSOLE_RX_DMAST, ENABLE);
+	
+	/* enable stream until it was enabled */
+	while((CONSOLE_RX_DMAST->CR&0x01) != 1) 
 	{
-		CONSOLE_UART->DR = *buffront_ptr_;
-		if(++buffront_ptr_ >= TxBuf_+TXBUF_SIZE) buffront_ptr_-=TXBUF_SIZE;
+		*RXDMA_IFCR_ = RXDMA_IFCR_MASK;
+		DMA_Cmd(CONSOLE_RX_DMAST, ENABLE);
 	}
-	
-	/* release mutex when ucos was used */
-#if CONSOLE_WITH_UCOS 
-	OSMutexPost(sendQueMutex_);
-#endif
 }
 #endif
+
 //end of file

@@ -3,6 +3,7 @@
 #include "CUartConsole.h"
 
 #define printf(fmt, args...) Console::Instance()->printf(fmt, ##args)
+#define is_printf_idel()	Console::Instance()->isTransmitterIdel()
 
 #endif
 //end of file

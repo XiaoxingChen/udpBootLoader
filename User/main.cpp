@@ -9,13 +9,14 @@
 #include "socket.h"
 #include "udpDevice.h"
 #include "iap.h"
+#include "Timer.h"
 
 uint8_t tx_mem_conf[8] = {8,8,8,8,8,8,8,8};	// for setting TMSR regsiter
 uint8_t rx_mem_conf[8] = {8,8,8,8,8,8,8,8};   // for setting RMSR regsiter
 uint8_t data[5000];
 uint8_t *data_buf = &data[0];    				// buffer for loopack data
-uint8_t ip[4] = {192,168,1,4};            // for setting SIP register
-uint8_t gw[4] = {192,168,1,1};              // for setting GAR register
+uint8_t ip[4] = {192,168,3,4};            // for setting SIP register
+uint8_t gw[4] = {192,168,3,1};              // for setting GAR register
 uint8_t sn[4] = {255,255,255,0};              // for setting SUBR register
 uint8_t mac[6] = {11,22,33,44,55,66};   // for setting SHAR register
 uint8_t test_buf[10] = {0,0,0,0,0,0,0,0,0,0};
@@ -23,18 +24,23 @@ void loopback_udp(uint8_t s, uint16_t port, uint8_t* buf, uint16_t mode);
 void loopback_tcps(uint8_t s, uint16_t port, uint8_t* buf, uint16_t mode);
 int tt = 1;
 
+Timer msTimer(2,2);
+Timer sTimer(1000,1000);
 int main(void)
 { 
 	NVIC_CONFIG();
-	CSysTick::instance()->start();
+	BaseTimer::Instance()->initialize();
 	Spi1.Init();
 	w5500.Bsp_Init();
 	w5500.RST_L();
-	CSysTick::instance()->wait();
-	CSysTick::instance()->wait();
+	
+	msTimer.reset();
+	while(!msTimer.isTimeUp());
+	
 	w5500.RST_H();
-	CSysTick::instance()->wait();
-	CSysTick::instance()->wait();
+	
+	msTimer.reset();
+	while(!msTimer.isTimeUp());
 	
 	setSHAR(&mac[0]);	/* set source hardware address */
 	getSHAR(test_buf);
@@ -46,11 +52,19 @@ int main(void)
 	getSIPR(test_buf);
 	setSn_KPALVTR(0,4);
 	
-	Console::Instance()->printf("\r\nstart!\r\n");
+	Console::Instance()->printf("\r\n boot loader start!\r\n");
 	iapUdpDevice.open();
+	
+//	if(0x55555555 != check_boot_parameter())
+//	{
+//		sTimer.reset();
+//		while(!sTimer.isTimeUp());
+//		iap_load_app(0x08010000);
+//	}
 	while(1)
 	{
 		iap_run();
+		Console::Instance()->transmitterRun();
 	}
 }
 

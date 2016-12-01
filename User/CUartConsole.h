@@ -8,11 +8,14 @@
 * release information: 
 *	2016/07/01: chenxx add noneDMA mode.
 * 2016/07/24: chenxx fixed the bug in printf: stop sending when overflow
+* 2016/08/26: chenxx completed the TX DMA mode.
 ********************************************************************************/
+// <<< Use Configuration Wizard in Context Menu >>>
 #ifndef _CUARTCONSOLE_H_
 #define _CUARTCONSOLE_H_
 #include "stm32f4xx.h"
 #include "Singleton.h"
+#include "ringque.h"
 
 
 /****** UART IOGROUP DMAST reference ******/
@@ -32,64 +35,162 @@
 //	UART4 	C10 			DMA1_Stream4
 
 //BSP MACROS
-#define CONSOLE_DMA_MODE		1
-//#define CONSOLE_NONEDMA_MODE	1
-#define CONSOLE_WITH_UCOS			0
-#define CONSOLE_USE_UART1			1//change here
-#define CONSOLE_IOGROUP_A9		1//change here
-#define CONSOLE_TX_DMAST			DMA2_Stream7 //change here
 
-#ifdef 	CONSOLE_USE_UART1 
-	#define 	CONSOLE_UART	USART1	
-#elif 	CONSOLE_USE_UART2
-	#define 	CONSOLE_UART	USART2	
-#elif 	CONSOLE_USE_UART3
-	#define 	CONSOLE_UART	USART3
-#elif 	CONSOLE_USE_UART4
-	#define 	CONSOLE_UART	UART4
-#elif 	CONSOLE_USE_UART5
-	#define 	CONSOLE_UART	UART5
+/**
+  * @brief  In silent mode, all functions of Console will be disabled. 
+  */
+
+#define CONSOLE_SILENT			0
+
+// <o> Console on USART: <0=> silent mode <1=>USART 1 <2=>USART 2 <3=> USART 3
+// 	<i>Default: 1
+#define STM32_CONSOLE_USART 1
+
+// <e>Enable DMA for transmission
+#define CONSOLE_TX_USE_DMA		1 
+// </e>
+
+// <e>Enable DMA for receive
+#define CONSOLE_RX_USE_DMA		0
+// </e>
+
+/* Macros for Board Support */
+#if STM32_CONSOLE_USART == 0
+#define CONSOLE_SILENT 1
+
+#elif STM32_CONSOLE_USART == 1
+	#define CONSOLE_UART	USART1
+	#define CONSOLE_IOGROUP_A9		1
+	#define CONSOLE_USE_UART1 		1
+	
+#elif STM32_CONSOLE_USART == 2
+	#define CONSOLE_UART	USART2
+	#define CONSOLE_IOGROUP_A2		1
+	#define CONSOLE_USE_UART2 		1
+
+#elif STM32_CONSOLE_USART == 3
+	#define CONSOLE_UART	USART3
+	#define CONSOLE_IOGROUP_B10		1
+	#define CONSOLE_USE_UART3 		1
 #endif
 
-#define CONSOLE_DMA				((DMA_TypeDef *)((uint32_t)CONSOLE_TX_DMAST&0xFFFFFC00))
-typedef struct os_event OS_EVENT;
+/**
+  * @brief  Macros for Console send 
+  * @note  uncomment the CONSOLE_TX_DMAST macro can
+	*		make the Console send port work at DMA mode
+  */
+#if CONSOLE_TX_USE_DMA
+#ifdef 	CONSOLE_USE_UART1 
+	#define 	CONSOLE_TX_DMAST	DMA2_Stream7	
+#elif 	CONSOLE_USE_UART2
+	#define 	CONSOLE_TX_DMAST	DMA1_Stream6	
+#elif 	CONSOLE_USE_UART3
+	#define 	CONSOLE_TX_DMAST	DMA1_Stream3
+#elif 	CONSOLE_USE_UART4
+	#define 	CONSOLE_TX_DMAST	DMA1_Stream4
+#elif 	CONSOLE_USE_UART5
+	#define 	CONSOLE_TX_DMAST	DMA1_Stream7
+#elif		CONSOLE_USE_UART6
+	#define 	CONSOLE_TX_DMAST	DMA2_Stream6
+//	#define 	CONSOLE_TX_DMAST	DMA2_Stream7
+#endif
+#endif //CONSOLE_TX_USE_DMA
+
+/**
+  * @brief  Macros for Console receive 
+  * @note  uncomment the CONSOLE_RX_DMAST macro can
+	*		make the Console send port work at DMA mode
+  */
+#if CONSOLE_RX_USE_DMA
+#ifdef 	CONSOLE_USE_UART1 
+	#define 	CONSOLE_RX_DMAST	DMA2_Stream2	
+#elif 	CONSOLE_USE_UART2
+	#define 	CONSOLE_RX_DMAST	DMA1_Stream5	
+#elif 	CONSOLE_USE_UART3
+	#define 	CONSOLE_RX_DMAST	DMA1_Stream1
+#elif 	CONSOLE_USE_UART4
+	#define 	CONSOLE_RX_DMAST	DMA1_Stream2
+#elif 	CONSOLE_USE_UART5
+	#define 	CONSOLE_RX_DMAST	DMA1_Stream0
+#elif		CONSOLE_USE_UART6
+	#define 	CONSOLE_RX_DMAST	DMA2_Stream1
+//	#define 	CONSOLE_RX_DMAST	DMA2_Stream2
+#endif
+#endif //CONSOLE_RX_USE_DMA
+
 class CUartConsole
 {
 public:
 	CUartConsole();
 	~CUartConsole();
-	uint8_t send_Array(uint8_t*, uint8_t);
+	uint16_t send_array(char*, uint16_t);
 	int printf(const char* fmt, ...) __attribute__((format(printf,2,3)));
+	void putc(const char c);
+	void puts(const char* s);
+	int getc(void);
 	int getch(void);
-	enum{TXBUF_SIZE = 500};
+	enum{
+		//<o> Console TX queue size
+		//<20-300>
+		//<i> [20, 300]
+		TXBUF_SIZE = 300,
+		//<o> Console TX DMA buffer size
+		//<10-50>
+		//<i> [10, 50]
+		TX_DMA_SIZE = 50,
+		//<o> Console RX queue size
+		//<10-50>
+		//<i> [10, 50]
+		RXBUF_SIZE = 15,
+		//<o> Console RX DMA buffer size
+		//<10-50>
+		//<i> [10, 50]
+		RX_DMA_SIZE = 15
+	};
 	void postErr();
+	uint16_t get_emptyBytesInTxQueue();
+	bool isTransmitterIdel();
+	void transmitterRun();
+	void receiverRun();
 
-#ifdef CONSOLE_NONEDMA_MODE
 	void run();
-#endif
-	
+	static char vsnprintfBuf_[TXBUF_SIZE]; //for sprintf
+
 private:
 	void InitSciGpio();
 	void InitSci();
+
+	static char TxBuf_[TXBUF_SIZE]; //for txQueue_.
+	ringque<char> txQueue_;
+#if CONSOLE_TX_USE_DMA
+	static char TxDmaBuf_[TX_DMA_SIZE]; //for txDma
+#endif
+
+	static char RxBuf_[RXBUF_SIZE];	//for rxQueue_.
+	ringque<char> rxQueue_;
+#ifdef CONSOLE_RX_DMAST
+	static char RxDmaBuf_[RX_DMA_SIZE]; //for rxDma
+#endif
+	
 	/* interrupt flag clear register */
+#ifdef CONSOLE_TX_DMAST
 	volatile uint32_t* TXDMA_IFCR_;
 	uint32_t TXDMA_IFCR_MASK;
-	uint16_t overflowCounter_;
-
-	static char TxBuf_[TXBUF_SIZE];
-	char* bufback_ptr_;	//Queue: [front, back)
-#ifdef CONSOLE_NONEDMA_MODE
-	static char vsnpritfBuf_[TXBUF_SIZE];
-	char* buffront_ptr_;//Queue: [front, back)
 #endif
 
-public:
-	/* when ucos was used */
-//#ifdef CONSOLE_WITH_UCOS 
-	OS_EVENT * sendQueMutex_;
-//#endif
+#ifdef CONSOLE_RX_DMAST
+	volatile uint32_t* RXDMA_IFCR_;
+	uint32_t RXDMA_IFCR_MASK;
+	void rxDMA_to_rxQueue();
+#endif
+
+	uint16_t overflowCounter_;
+	
+
 };
+
 typedef NormalSingleton<CUartConsole> Console;
 #define postErr(msg) printf("Error: %s(%d)-%s(): %s\r\n", __FILE__, __LINE__, __FUNCTION__, msg)
+
 #endif
-//end of file
+// <<< end of configuration section >>>

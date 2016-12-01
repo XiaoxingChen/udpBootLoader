@@ -94,7 +94,7 @@ bl_err_t bl_go()
 				break;//Error, protected
 			}
 			iapdev_write_byte(ACK);
-			
+			printf("Get \"Go\" command and wait for 32bits address and 1byte checksum.\r\n");
 			exe_tick++;
 			return BL_YIELD;
 		}
@@ -105,7 +105,7 @@ bl_err_t bl_go()
 			if(iap_device.data_in_read_buf() < 5) //4bytes address and 1byte checksum
 				return BL_YIELD;
 			
-			for(i = 0; i < 3; i++)
+			for(i = 0; i < 4; i++)
 			{
 				/* MSB is transfered fisrt - ref. AN3155 3.6 */
 				start_addr <<= 8;
@@ -113,13 +113,18 @@ bl_err_t bl_go()
 			}
 			
 			sum_check = iapdev_read_byte();
+			printf("start_addr = 0x%X, sum_check = 0x%X\r\n", start_addr, sum_check);
 			
 			/* XOR != 0 */
-			if(sum_check ^ xor_check_sum((uint8_t*)start_addr, sizeof(start_addr)))
+			if(sum_check ^ xor_check_sum((uint8_t*)&start_addr, sizeof(start_addr)))
 			{
+				printf("check sum failed...\r\n");
 				break;//sum check error
 			}
 			iapdev_write_byte(ACK);
+			printf("check sum ok...\r\nGo to application\r\n");	
+			
+			while(!is_printf_idel());
 			iap_load_app(start_addr);
 			
 			break;//if program goes here, means load app failed.

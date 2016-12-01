@@ -21,7 +21,7 @@
   ******************************************************************************
   */ 
 
-
+#include "Timer.h"
 extern void TimeTick_Decrement(void);	    //引入外部中断计数函数
 #ifdef __cplusplus
 extern "C" {
@@ -140,7 +140,7 @@ void PendSV_Handler(void)
 **********************************************************************************************************/
 void SysTick_Handler(void)
 {
-// TimeTick_Decrement();  //调用中断计数函数
+	CPUTIMER0_ISR();
 }
 /******************************************************************************/
 /*                 STM32F4xx Peripherals Interrupt Handlers                   */
@@ -161,7 +161,7 @@ void SysTick_Handler(void)
 //
 //void DMA2_Stream7_IRQHandler(void)  
 //
-#include "CLed.h"
+
 void DMA2_Stream7_IRQHandler(void)  
 {
 	DMA_ClearITPendingBit(DMA2_Stream7,DMA_IT_TCIF7);
