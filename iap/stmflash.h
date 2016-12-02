@@ -1,23 +1,13 @@
 #ifndef __STMFLASH_H__
 #define __STMFLASH_H__ 
-//////////////////////////////////////////////////////////////////////////////////	 
-//本程序只供学习使用，未经作者许可，不得用于其它任何用途
-//ALIENTEK STM32F407开发板
-//STM32内部FLASH读写 驱动代码	   
-//正点原子@ALIENTEK
-//技术论坛:www.openedv.com
-//创建日期:2014/5/9
-//版本：V1.0
-//版权所有，盗版必究。
-//Copyright(C) 广州市星翼电子科技有限公司 2014-2024
-//All rights reserved									  
-////////////////////////////////////////////////////////////////////////////////// 
+
 #include <stdint.h>
 
-
-
 //FLASH起始地址
-#define STM32_FLASH_BASE 0x08000000 	//STM32 FLASH的起始地址
+#define STM32_FLASH_BASE 	0x08000000 	//STM32 FLASH的起始地址
+#define BOOT_PARAM_NORM 	0x5555AAAA
+#define BOOT_PARAM_IAP		0x2b2b6666
+#define FLASH_APP1_ADDR		0x08010000 
  
 
 //FLASH 扇区的起始地址
@@ -34,10 +24,9 @@
 #define ADDR_FLASH_SECTOR_10    ((uint32_t)0x080C0000) 	//扇区10起始地址,128 Kbytes  
 #define ADDR_FLASH_SECTOR_11    ((uint32_t)0x080E0000) 	//扇区11起始地址,128 Kbytes  
 
-uint32_t STMFLASH_ReadWord(uint32_t faddr);		  	//读出字  
-void STMFLASH_Write(uint32_t WriteAddr,uint32_t *pBuffer,uint32_t NumToWrite);		//从指定地址开始写入指定长度的数据
-void STMFLASH_Read(uint32_t ReadAddr,uint32_t *pBuffer,uint32_t NumToRead);   		//从指定地址开始读出指定长度的数据
 int STMFLASH_write_bytes(uint32_t appxaddr,uint8_t *buf,uint16_t len);
+uint32_t read_boot_parameter();
+int write_boot_parameter(uint32_t);
 						   
 #endif
 

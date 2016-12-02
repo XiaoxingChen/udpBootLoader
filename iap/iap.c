@@ -24,16 +24,6 @@ void iap_load_app(uint32_t appxaddr)
 }		 
 
 /**
-  * @brief  check boot parameter in OTP
-	* @param  None
-	* @retval None
-  */
-uint32_t check_boot_parameter()
-{
-	return *((volatile uint32_t*)0x1FFF7800);
-}
-
-/**
   * @brief  run iap logic
 	* @param  None
 	* @retval None

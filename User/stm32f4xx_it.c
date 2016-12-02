@@ -22,7 +22,8 @@
   */ 
 
 #include "Timer.h"
-extern void TimeTick_Decrement(void);	    //ÒýÈëÍâ²¿ÖÐ¶Ï¼ÆÊýº¯Êý
+#include "printf.h"
+#include "stmflash.h"
 #ifdef __cplusplus
 extern "C" {
 #endif 
@@ -61,9 +62,11 @@ void NMI_Handler(void)
 void HardFault_Handler(void)
 {
   /* Go to infinite loop when Hard Fault exception occurs */
-  while (1)
-  {
-  }
+	//printf("BootLoader HardFault_Handler...\r\n");
+	write_boot_parameter(BOOT_PARAM_IAP);
+	//while(!Console::Instance()->isTransmitterIdel());
+	
+  NVIC_SystemReset();
 }
 
 /**
@@ -133,10 +136,10 @@ void PendSV_Handler(void)
 }
 
 /**********************************************************************************************************
-*º¯ÊýÃû£ºSysTick_Handler()
-*²ÎÊý£ºvoid
-*·µ»ØÖµ£ºvoid
-*¹¦ÄÜ£ºÏµÍ³½ÚÅÄ¶¨Ê±Æ÷ÖÐ¶Ïº¯Êý
+*ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½SysTick_Handler()
+*ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½void
+*ï¿½ï¿½ï¿½ï¿½Öµï¿½ï¿½void
+*ï¿½ï¿½ï¿½Ü£ï¿½ÏµÍ³ï¿½ï¿½ï¿½Ä¶ï¿½Ê±ï¿½ï¿½ï¿½Ð¶Ïºï¿½ï¿½ï¿½
 **********************************************************************************************************/
 void SysTick_Handler(void)
 {

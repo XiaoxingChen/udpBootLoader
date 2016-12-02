@@ -5,12 +5,24 @@
 	* @param  None
   * @retval None
   */
-CUdpDevice::CUdpDevice()
-	:native_port_(5004),
-	iap_port_(0),
-	socket_n_(2),
+CUdpDevice::CUdpDevice(uint16_t native_port, 
+											uint16_t remote_port,
+											uint8_t socket_n,
+											uint8_t* remote_ip)
+	:native_port_(native_port),
+	remote_port_(remote_port),
+	socket_n_(socket_n),
 	is_first_in_(true)
-{}
+{
+	if(remote_ip != (uint8_t*)0)
+	{
+		for(int i = 0; i < 4; i++)
+		{
+			remote_ip_[i] = remote_ip[i];
+		}
+	}
+	
+}
 	
 /**
 * @brief  open
@@ -41,7 +53,7 @@ uint32_t CUdpDevice::close()
   */
 uint32_t CUdpDevice::write(const uint8_t* databuf, uint32_t len)
 {
-	return sendto(socket_n_, (uint8_t *)databuf, len, (uint8_t*)iap_ip_, iap_port_);
+	return sendto(socket_n_, (uint8_t *)databuf, len, (uint8_t*)remote_ip_, remote_port_);
 }
 
 /**
@@ -53,7 +65,7 @@ uint32_t CUdpDevice::write(const uint8_t* databuf, uint32_t len)
 uint32_t CUdpDevice::read(uint8_t* databuf, uint32_t len)
 {
 	int32_t ret;
-	ret = recvfrom(socket_n_, databuf, len, iap_ip_, &iap_port_);
+	ret = recvfrom(socket_n_, databuf, len, remote_ip_, &remote_port_);
 	return ret;
 }
 
@@ -111,5 +123,32 @@ void CUdpDevice::run()
 			 break;
 	}
 }
-CUdpDevice iapUdpDevice;
+
+/**
+  * @brief  set remote ip address
+	* @param  192 168 1 4
+  * @retval None
+  */
+void CUdpDevice::set_remote_ip(uint8_t byte0, uint8_t byte1, uint8_t byte2, uint8_t byte3)
+{
+	remote_ip_[0] = byte0;
+	remote_ip_[1] = byte1;
+	remote_ip_[2] = byte2;
+	remote_ip_[3] = byte3;
+}
+
+/**
+  * @brief  set remote port
+	* @param  port num
+  * @retval None
+  */
+void CUdpDevice::set_remote_port(uint16_t port)
+{
+	remote_port_ = port;
+}
+
+CUdpDevice iapUdpDevice(19204, 0, 2);
+extern uint8_t w5500_ip[4];
+uint8_t consoleRemoteIp[4] = {192, 168, 1, 255};
+CUdpDevice udpConsole(19205, 5003, 3, consoleRemoteIp);
 //end of file

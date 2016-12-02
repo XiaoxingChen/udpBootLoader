@@ -13,6 +13,7 @@ public:
 	void initialize();
 	void doUpdate();
 	int32_t getTime(){return _baseTimer;}
+	void delay_ms(uint16_t value);
 	
 	inline void start()
 	{

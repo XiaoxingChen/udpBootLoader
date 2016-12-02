@@ -131,9 +131,9 @@ public:
 	int getch(void);
 	enum{
 		//<o> Console TX queue size
-		//<20-300>
-		//<i> [20, 300]
-		TXBUF_SIZE = 300,
+		//<20-400>
+		//<i> [20, 400]
+		TXBUF_SIZE = 400,
 		//<o> Console TX DMA buffer size
 		//<10-50>
 		//<i> [10, 50]
@@ -189,7 +189,7 @@ private:
 
 };
 
-typedef NormalSingleton<CUartConsole> Console;
+//typedef NormalSingleton<CUartConsole> Console;
 #define postErr(msg) printf("Error: %s(%d)-%s(): %s\r\n", __FILE__, __LINE__, __FUNCTION__, msg)
 
 #endif

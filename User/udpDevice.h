@@ -6,7 +6,7 @@ class CUdpDevice
 	:public CDevice<uint8_t>
 {
 	public:
-		CUdpDevice();
+		CUdpDevice(uint16_t, uint16_t, uint8_t, uint8_t* = 0);
 	
 		virtual uint32_t open();
 		virtual uint32_t close();
@@ -21,12 +21,14 @@ class CUdpDevice
 		virtual void runTransmitter() {}
 		virtual void runReceiver() {}
 		void run();
+		void set_remote_ip(uint8_t, uint8_t, uint8_t, uint8_t);
+		void set_remote_port(uint16_t);
 
 	private:
 		uint16_t native_port_;
-		uint16_t iap_port_;
+		uint16_t remote_port_;
 		uint8_t socket_n_;
-		uint8_t iap_ip_[4];
+		uint8_t remote_ip_[4];
 		bool is_first_in_;
 };
 

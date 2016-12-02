@@ -19,6 +19,12 @@ void CBaseTimer::doUpdate()
 	_baseTimer &= 0x7FFFFFFF;
 }
 
+void CBaseTimer::delay_ms(uint16_t value)
+{
+	int32_t inTime = _baseTimer;
+	while(_baseTimer - inTime < value);
+}
+
 Timer::Timer(int32_t delay,int32_t period)
 {
 	_timer = BaseTimer::Instance()->getTime();

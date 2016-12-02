@@ -122,7 +122,14 @@ bl_err_t bl_go()
 				break;//sum check error
 			}
 			iapdev_write_byte(ACK);
-			printf("check sum ok...\r\nGo to application\r\n");	
+			printf("check sum ok...\r\n");	
+			if(BOOT_PARAM_IAP == read_boot_parameter())
+			{
+				write_boot_parameter(BOOT_PARAM_NORM);
+			}
+			printf("Go to application\r\n");	
+			
+		
 			
 			while(!is_printf_idel());
 			iap_load_app(start_addr);
@@ -160,9 +167,9 @@ bl_err_t bl_write_memory()
 				iapdev_write_byte(NACK);
 				break;
 			}
-			printf("read protect check ok.\r\n");
 			iapdev_write_byte(ACK);
-			printf("wait for 32bits address and 1byte checksum.\r\n");
+			printf("Get \"Write Memory\" command\r\n");
+			//printf("wait for 32bits address and 1byte checksum.\r\n");
 			exe_tick++;
 			return BL_YIELD;
 		}
@@ -182,15 +189,16 @@ bl_err_t bl_write_memory()
 			}
 			
 			sum_check = iapdev_read_byte();
-			printf("start_addr = 0x%X, sum_check = 0x%X\r\n", start_addr, sum_check);
+			//printf("start_addr = 0x%X, sum_check = 0x%X\r\n", start_addr, sum_check);
 			/* XOR != 0 */
 			if(sum_check ^ xor_check_sum((uint8_t*)&start_addr, sizeof(start_addr))) 
 			{
-				printf("check sum failed...\r\n");
+				printf("Error: start_addr = 0x%X, sum_check = 0x%X, result = 0x%X, failed...\r\n",
+					start_addr, sum_check, xor_check_sum((uint8_t*)&start_addr, sizeof(start_addr)));
+				iapdev_write_byte(NACK);
 				break;
 			}
-			printf("check sum ok\r\n");
-			printf("wait for pack length\r\n");
+			//printf("wait for pack length\r\n");
 			iapdev_write_byte(ACK);
 			exe_tick++;
 			return BL_YIELD;
@@ -201,16 +209,15 @@ bl_err_t bl_write_memory()
 			if(iap_device.data_in_read_buf() == 0) //wait for pack length
 				return BL_YIELD;			
 			pack_length = iapdev_read_byte() + 1;
-			printf("pack length = %d\r\n", pack_length);
 			
 			// ref. AN3155 3.6 page20
 			// pack_length must be a multiple of 4
 			if(pack_length <= 0 || pack_length > 256 || (pack_length & 0x3) != 0)
 			{
-				printf("pack length check failed\r\n");
+				printf("pack length = %d, check failed (0 < pl < 256, multiple of 4)\r\n", pack_length);
 				break;
 			}
-			printf("wait for long data and sumcheck(packlen XOR longdata)\r\n");
+			//printf("wait for long data and sumcheck(packlen XOR longdata)\r\n");
 			exe_tick++;
 			return BL_YIELD;
 		}
@@ -224,7 +231,7 @@ bl_err_t bl_write_memory()
 			if(iap_device.data_in_read_buf() < (pack_length + 1))
 				return BL_YIELD;
 			
-			printf("get long data\r\n");
+			//printf("get long data\r\n");
 			iap_device.read(long_data_buffer, pack_length);
 			sum_check = iapdev_read_byte();
 			
@@ -237,14 +244,18 @@ bl_err_t bl_write_memory()
 				printf("long data sum check failed...\r\n");
 				break;
 			}
-			printf("long data sum check ok...\r\n");
 			
-			STMFLASH_write_bytes(start_addr, long_data_buffer, pack_length);
-			//TODO: write long_data_buffer into flash
-			printf("writing into flash...\r\n");
-			iapdev_write_byte(ACK);
 			exe_tick = 0;
-			printf("write finished\r\n");
+			
+			if(0 != STMFLASH_write_bytes(start_addr, long_data_buffer, pack_length))
+			{
+				printf("write to address = 0x%X failed\r\n", start_addr);
+				iapdev_write_byte(NACK);
+				break;
+			}
+
+			printf("write %d bytes to address = 0x%X finished\r\n", pack_length, start_addr);
+			iapdev_write_byte(ACK);
 			return BL_OK;
 		}
 		default:
@@ -342,7 +353,7 @@ static uint8_t xor_check_sum(uint8_t* data_addr, uint16_t size)
 	{
 		result ^= *(data_addr + i);
 	}
-	printf("sum check result = 0x%X\r\n", result);
+	//printf("sum check result = 0x%X\r\n", result);
 	return result;
 }
 

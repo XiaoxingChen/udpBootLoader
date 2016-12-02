@@ -2,18 +2,6 @@
 #include "stm32f4xx.h"
 #include <string.h>
 #include "printf.h"
-//////////////////////////////////////////////////////////////////////////////////	 
-//本程序只供学习使用，未经作者许可，不得用于其它任何用途
-//ALIENTEK STM32F407开发板
-//STM32内部FLASH读写 驱动代码	   
-//正点原子@ALIENTEK
-//技术论坛:www.openedv.com
-//创建日期:2014/5/9
-//版本：V1.0
-//版权所有，盗版必究。
-//Copyright(C) 广州市星翼电子科技有限公司 2014-2024
-//All rights reserved									  
-////////////////////////////////////////////////////////////////////////////////// 
  
 //获取某个地址所在的flash扇区
 //addr:flash地址
@@ -97,7 +85,7 @@ int STMFLASH_write_bytes(uint32_t appxaddr,uint8_t *buf,uint16_t len)
 			ret = -1;
 		}
 	}
-	printf("Erase finished...\r\nStart to write\r\n");
+//	printf("Erase finished...\r\nStart to write\r\n");
 	if(ret == 0) //did not get any error
 	{
 		for(i = 0; i < len; i++)
@@ -110,13 +98,33 @@ int STMFLASH_write_bytes(uint32_t appxaddr,uint8_t *buf,uint16_t len)
 			}
 		}
 	}
-	printf("Flash programming finished...\r\n");
+//	printf("Flash programming finished...\r\n");
 	FLASH_DataCacheCmd(ENABLE);
 	FLASH_Lock();
 		
 	return ret;
 }
 
+#define BOOT_PARAM_ADDR 0x0800C000
+/**
+  * @brief  get boot parameter in special flash address
+	* @param  None
+	* @retval None
+  */
+uint32_t read_boot_parameter()
+{
+	return *((volatile uint32_t*)BOOT_PARAM_ADDR);
+}
+
+/**
+  * @brief  write boot parameter in special flash address
+	* @param  value to write
+	* @retval None
+  */
+int write_boot_parameter(uint32_t value)
+{
+	return STMFLASH_write_bytes(BOOT_PARAM_ADDR, (uint8_t*)&value, sizeof(value));
+}
 
 
 
