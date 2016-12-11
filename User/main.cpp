@@ -27,6 +27,7 @@ int main(void)
 	NVIC_CONFIG();
 	BaseTimer::Instance()->initialize();
 	
+	//if(BOOT_PARAM_NORM == read_boot_parameter())
 	if(BOOT_PARAM_IAP != read_boot_parameter())
 	{
 		iap_load_app(FLASH_APP1_ADDR);
@@ -53,7 +54,15 @@ int main(void)
 	iapUdpDevice.open();
 
 	BaseTimer::Instance()->delay_ms(2000);
-	Console::Instance()->printf("\r\n boot loader start!\r\n");
+	if(BOOT_PARAM_IAP == read_boot_parameter())
+	{
+		Console::Instance()->printf("\r\n Bootloader start!\r\n");
+	}else
+	{
+		Console::Instance()->printf("\r\n Boot paramter error: 0x%X, keep at bootloader\r\n",
+			read_boot_parameter());
+	}
+	
 	
 
 	while(1)

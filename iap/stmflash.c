@@ -3,9 +3,9 @@
 #include <string.h>
 #include "printf.h"
  
-//获取某个地址所在的flash扇区
-//addr:flash地址
-//返回值:0~11,即addr所在的扇区
+
+
+
 uint16_t STMFLASH_GetFlashSector(u32 addr)
 {
 	if(addr<ADDR_FLASH_SECTOR_1)return FLASH_Sector_0;
@@ -48,6 +48,7 @@ FLASH_Status erase_sector_once(uint32_t FLASH_Sector)
 	uint8_t idx = FLASH_Sector_to_index(FLASH_Sector);
 	if(!is_sector_erased[idx])
 	{
+		printf("Erasing sector %d\r\n", FLASH_Sector_to_index(FLASH_Sector));
 		ret = FLASH_EraseSector(FLASH_Sector, VoltageRange_3);
 		is_sector_erased[idx] = 0xFF;
 	}
@@ -78,7 +79,7 @@ int STMFLASH_write_bytes(uint32_t appxaddr,uint8_t *buf,uint16_t len)
 	
 	if(appxaddr < 0X1FFF0000)			//do not erase OTP sector
 	{
-		printf("Erasing sector %d\r\n", FLASH_Sector_to_index(STMFLASH_GetFlashSector(appxaddr)));
+		//printf("Erasing sector %d\r\n", FLASH_Sector_to_index(STMFLASH_GetFlashSector(appxaddr)));
 		if(erase_sector_once(STMFLASH_GetFlashSector(appxaddr)) != FLASH_COMPLETE)
 		{
 			RESET_SECTOR_ERASE_MARK();
@@ -90,7 +91,7 @@ int STMFLASH_write_bytes(uint32_t appxaddr,uint8_t *buf,uint16_t len)
 	{
 		for(i = 0; i < len; i++)
 		{
-			if(FLASH_ProgramByte(appxaddr + i, *(buf + i)) != FLASH_COMPLETE)//写入数据
+			if(FLASH_ProgramByte(appxaddr + i, *(buf + i)) != FLASH_COMPLETE)//写锟斤拷锟斤拷锟斤拷
 			{ 
 				RESET_SECTOR_ERASE_MARK();
 				ret = -1;

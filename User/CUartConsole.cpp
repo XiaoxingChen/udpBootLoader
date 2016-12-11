@@ -93,22 +93,49 @@ void CUartConsole::InitSciGpio()
 {
 	GPIO_InitTypeDef GPIO_InitStructure; 
 	uint32_t RCC_AHB1Periph_GPIOx;
-	uint8_t GPIO_PinSource_BASE;
+	uint8_t GPIO_PinSource_Tx;
+	uint8_t GPIO_PinSource_Rx;
 	uint8_t GPIO_AF_USARTx;
-	GPIO_TypeDef *GPIOx;
+	GPIO_TypeDef *GPIOx_Tx;
+	GPIO_TypeDef *GPIOx_Rx;
 	
 	#if CONSOLE_IOGROUP_A2
 		RCC_AHB1Periph_GPIOx = RCC_AHB1Periph_GPIOA;
-		GPIOx = GPIOA;
-		GPIO_PinSource_BASE = GPIO_PinSource2;
+		GPIOx_Tx = GPIOx_Rx = GPIOA;
+		GPIO_PinSource_Tx = GPIO_PinSource2;
+		GPIO_PinSource_Rx = GPIO_PinSource3;
+	
 	#elif CONSOLE_IOGROUP_A9
 		RCC_AHB1Periph_GPIOx = RCC_AHB1Periph_GPIOA;
-		GPIOx = GPIOA;
-		GPIO_PinSource_BASE = GPIO_PinSource9;
+		GPIOx_Tx = GPIOx_Rx = GPIOA;
+		GPIO_PinSource_Tx = GPIO_PinSource9;
+		GPIO_PinSource_Rx = GPIO_PinSource10;
+	
 	#elif CONSOLE_IOGROUP_B10
 		RCC_AHB1Periph_GPIOx = RCC_AHB1Periph_GPIOB;
-		GPIOx = GPIOB;
-		GPIO_PinSource_BASE = GPIO_PinSource10;
+		GPIOx_Tx = GPIOx_Rx = GPIOB;
+		GPIO_PinSource_Tx = GPIO_PinSource10;
+		GPIO_PinSource_Rx = GPIO_PinSource11;
+		
+	#elif CONSOLE_IOGROUP_C10
+		RCC_AHB1Periph_GPIOx = RCC_AHB1Periph_GPIOC;
+		GPIOx_Tx = GPIOx_Rx = GPIOC;
+		GPIO_PinSource_Tx = GPIO_PinSource10;
+		GPIO_PinSource_Rx = GPIO_PinSource11;
+	
+	#elif CONSOLE_IOGROUP_C12D2
+		RCC_AHB1Periph_GPIOx = RCC_AHB1Periph_GPIOD|RCC_AHB1Periph_GPIOC;
+		GPIOx_Tx = GPIOC;
+		GPIOx_Rx = GPIOD;
+		GPIO_PinSource_Tx = GPIO_PinSource12;
+		GPIO_PinSource_Rx = GPIO_PinSource2;
+		
+	#elif CONSOLE_IOGROUP_C6
+		RCC_AHB1Periph_GPIOx = RCC_AHB1Periph_GPIOC;
+		GPIOx_Tx = GPIOx_Rx = GPIOC;
+		GPIO_PinSource_Tx = GPIO_PinSource6;
+		GPIO_PinSource_Rx = GPIO_PinSource7;
+		
 	#else 
 		#error
 	#endif
@@ -119,6 +146,12 @@ void CUartConsole::InitSciGpio()
 		GPIO_AF_USARTx = GPIO_AF_USART2;
 	#elif CONSOLE_USE_UART3	
 		GPIO_AF_USARTx = GPIO_AF_USART3;
+	#elif CONSOLE_USE_UART4	
+		GPIO_AF_USARTx = GPIO_AF_UART4;
+	#elif CONSOLE_USE_UART5	
+		GPIO_AF_USARTx = GPIO_AF_UART5;
+	#elif CONSOLE_USE_UART6	
+		GPIO_AF_USARTx = GPIO_AF_USART6;
 	#else 
 		#error
 	#endif 
@@ -127,15 +160,19 @@ void CUartConsole::InitSciGpio()
 	RCC_AHB1PeriphClockCmd(RCC_AHB1Periph_GPIOx, ENABLE);
 	
 	/* Config Pin: RXD TXD */
-	GPIO_PinAFConfig(GPIOx, GPIO_PinSource_BASE, GPIO_AF_USARTx);
-	GPIO_PinAFConfig(GPIOx, GPIO_PinSource_BASE + 1, GPIO_AF_USARTx);
+	GPIO_PinAFConfig(GPIOx_Tx, GPIO_PinSource_Tx, GPIO_AF_USARTx);
+	GPIO_PinAFConfig(GPIOx_Rx, GPIO_PinSource_Rx, GPIO_AF_USARTx);
 	
 	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
 	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
 	GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
 	GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_UP;
-	GPIO_InitStructure.GPIO_Pin = (GPIO_Pin_0|GPIO_Pin_1)<< GPIO_PinSource_BASE;
-	GPIO_Init(GPIOx, &GPIO_InitStructure);
+	
+	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_0<< GPIO_PinSource_Tx;
+	GPIO_Init(GPIOx_Tx, &GPIO_InitStructure);
+	
+	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_0<< GPIO_PinSource_Rx;
+	GPIO_Init(GPIOx_Rx, &GPIO_InitStructure);
 }
 
 /**
@@ -152,6 +189,12 @@ void CUartConsole::InitSci()
 		RCC_APB1PeriphClockCmd(RCC_APB1Periph_USART2, ENABLE);
 	#elif  CONSOLE_USE_UART3  
 		RCC_APB1PeriphClockCmd(RCC_APB1Periph_USART3, ENABLE);
+	#elif  CONSOLE_USE_UART4  
+		RCC_APB1PeriphClockCmd(RCC_APB1Periph_UART4, ENABLE);
+	#elif  CONSOLE_USE_UART5  
+		RCC_APB1PeriphClockCmd(RCC_APB1Periph_UART5, ENABLE);
+	#elif  CONSOLE_USE_UART6  
+		RCC_APB2PeriphClockCmd(RCC_APB2Periph_USART6, ENABLE);
 	#else 
 		#error
 	#endif
@@ -414,19 +457,6 @@ void CUartConsole::run()
 }
 
 /**
-* @brief  Is Transmitter idel or not
-* @param  None
-* @retval If is idel
-*/
-bool CUartConsole::isTransmitterIdel()
-{
-	transmitterRun();
-	return (0 == txQueue_.elemsInQue() 
-		&& 0 == DMA_GetCurrDataCounter(CONSOLE_TX_DMAST)
-		&& 1 == USART_GetFlagStatus(CONSOLE_UART, USART_FLAG_TXE));
-}
-
-/**
   * @brief  move data from RX DMA buffer to rxQueue_
   * @param  None
   * @retval None
@@ -462,5 +492,18 @@ void CUartConsole::rxDMA_to_rxQueue()
 	}
 }
 #endif
+
+/**
+* @brief  Is Transmitter idel or not
+* @param  None
+* @retval If is idel
+*/
+bool CUartConsole::isTransmitterIdel()
+{
+	transmitterRun();
+	return (0 == txQueue_.elemsInQue() 
+		&& 0 == DMA_GetCurrDataCounter(CONSOLE_TX_DMAST)
+		&& 1 == USART_GetFlagStatus(CONSOLE_UART, USART_FLAG_TXE));
+}
 
 //end of file

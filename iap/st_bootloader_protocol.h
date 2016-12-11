@@ -11,22 +11,6 @@
 #include <stdint.h>
 #include "device.h"
 
-//enum BL_CMD_CODE
-//{
-//	GET 						= 0x00,
-//	GET_VERSION_RPS = 0x01,
-//	GET_ID 					= 0x02,
-//	READ_MEM 				= 0x11,
-//	GO 							= 0x21,
-//	WRITE_MEM 			= 0x31,
-//	ERASE 					= 0x43,
-//	EXTENDED_ERASE 	= 0x44,
-//	WRITE_PROTECT 	= 0x63,
-//	WRITE_UNPROTECT = 0x73,
-//	READ_PROTECT 		= 0x82,
-//	READ_UNPROTECT 	= 0x92
-//};
-
 enum bl_err_t
 {
 	BL_OK = 0,

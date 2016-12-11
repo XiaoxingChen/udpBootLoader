@@ -42,9 +42,10 @@
 
 #define CONSOLE_SILENT			0
 
-// <o> Console on USART: <0=> silent mode <1=>USART 1 <2=>USART 2 <3=> USART 3
+// <o> Console on USART: <0=> silent mode <1=>USART 1 <2=>USART 2 <3=> USART 3 
+// <4=> USART 4 <5=> USART 5 <6=> USART 6
 // 	<i>Default: 1
-#define STM32_CONSOLE_USART 1
+#define STM32_CONSOLE_USART 0
 
 // <e>Enable DMA for transmission
 #define CONSOLE_TX_USE_DMA		1 
@@ -56,7 +57,11 @@
 
 /* Macros for Board Support */
 #if STM32_CONSOLE_USART == 0
-#define CONSOLE_SILENT 1
+	#undef	CONSOLE_SILENT 
+	#define CONSOLE_SILENT 				1
+	#define CONSOLE_UART					USART1
+	#define CONSOLE_IOGROUP_A9		1
+	#define CONSOLE_USE_UART1 		1
 
 #elif STM32_CONSOLE_USART == 1
 	#define CONSOLE_UART	USART1
@@ -72,6 +77,21 @@
 	#define CONSOLE_UART	USART3
 	#define CONSOLE_IOGROUP_B10		1
 	#define CONSOLE_USE_UART3 		1
+	
+#elif STM32_CONSOLE_USART == 4
+	#define CONSOLE_UART	UART4
+	#define CONSOLE_IOGROUP_C10		1
+	#define CONSOLE_USE_UART4 		1
+	
+#elif STM32_CONSOLE_USART == 5
+	#define CONSOLE_UART	UART5
+	#define CONSOLE_IOGROUP_C12D2	1
+	#define CONSOLE_USE_UART5 		1
+	
+#elif STM32_CONSOLE_USART == 6
+	#define CONSOLE_UART	USART6
+	#define CONSOLE_IOGROUP_C6		1
+	#define CONSOLE_USE_UART6 		1
 #endif
 
 /**
@@ -149,9 +169,9 @@ public:
 	};
 	void postErr();
 	uint16_t get_emptyBytesInTxQueue();
-	bool isTransmitterIdel();
 	void transmitterRun();
 	void receiverRun();
+	bool isTransmitterIdel();
 
 	void run();
 	static char vsnprintfBuf_[TXBUF_SIZE]; //for sprintf
@@ -189,7 +209,7 @@ private:
 
 };
 
-//typedef NormalSingleton<CUartConsole> Console;
+typedef NormalSingleton<CUartConsole> Console;
 #define postErr(msg) printf("Error: %s(%d)-%s(): %s\r\n", __FILE__, __LINE__, __FUNCTION__, msg)
 
 #endif

@@ -165,10 +165,11 @@ bl_err_t bl_write_memory()
 			if(bl_is_read_protected())
 			{
 				iapdev_write_byte(NACK);
+				printf("Get \"Write Memory\" command but flash protected\r\n");
 				break;
 			}
 			iapdev_write_byte(ACK);
-			printf("Get \"Write Memory\" command\r\n");
+			//printf("Get \"Write Memory\" command\r\n");
 			//printf("wait for 32bits address and 1byte checksum.\r\n");
 			exe_tick++;
 			return BL_YIELD;

@@ -30,6 +30,6 @@ class CConsole
 		CDevice<uint8_t>& consoleDevice;
 };
 
-typedef NormalSingleton<CConsole> Console;
+//typedef NormalSingleton<CConsole> Console;
 #endif
 //end of file
