@@ -147,7 +147,7 @@ void CUdpDevice::set_remote_port(uint16_t port)
 	remote_port_ = port;
 }
 
-CUdpDevice iapUdpDevice(19204, 0, 2);
+CUdpDevice iapUdpDevice(5003, 0, 2);
 extern uint8_t w5500_ip[4];
 uint8_t consoleRemoteIp[4] = {192, 168, 1, 255};
 CUdpDevice udpConsole(19205, 5003, 3, consoleRemoteIp);
